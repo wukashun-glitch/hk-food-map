@@ -313,13 +313,28 @@
 
     // 6. 提交 URL 自動處理 (接駁點)
     function submitUrl() {
-      const url = document.getElementById('postUrlInput').value;
-      if (!url) return alert("請輸入有效的網址！");
-      
-      alert("已收到網址！系統正在發送至 Google Sheet / AI 處理擷取...");
-      closeModal();
-      document.getElementById('postUrlInput').value = '';
-    }
+  const url = document.getElementById('postUrlInput').value;
+  if (!url) return alert("請輸入有效的網址！");
+  
+  // 替換成你在 Apps Script 部署後拿到的 Web App URL
+  const scriptUrl = "https://script.google.com/macros/s/AKfycbyBMyvi9u0Vyhm8wQe9OQ5zQigVzsCBN8P23akJ78Zw1IEWiKA_W-J7nPu0biL2juZUnw/exec";
+
+  alert("正在傳送給 AI 分析並寫入 Google Sheet，請稍等約 5-10 秒...");
+  
+  fetch(scriptUrl, {
+    method: 'POST',
+    mode: 'no-cors', // 避免跨網域阻擋
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: url })
+  })
+  .then(() => {
+    alert("成功新增！請重新整理頁面或檢視 Google Sheet。");
+    closeModal();
+    document.getElementById('postUrlInput').value = '';
+  })
+  .catch(err => alert("發生錯誤：" + err));
+}
+
   </script>
 </body>
 </html>
