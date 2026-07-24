@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>香港美食地圖美食地圖 HK Foodie Map</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- FontAwesome 圖標 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'PingFang HK', 'Microsoft JhengHei', sans-serif; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    
+    /* 地圖全螢幕 */
+    #map { width: 100vw; height: 100vh; z-index: 1; }
+
+    /* 頂部懸浮搜尋列與控制面板 */
+    .floating-panel {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: 90%;
+      max-width: 450px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      padding: 12px 16px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .search-row { display: flex; gap: 8px; }
+    .search-row input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+    .search-row button {
+      background: #ff4757;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    /* 分類標籤篩選 */
+    .category-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .category-bar::-webkit-scrollbar { display: none; }
+    .tag-btn {
+      background: #f1f2f6;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .tag-btn.active {
+      background: #2ed573;
+      color: white;
+    }
+
+    /* 新增餐廳懸浮按鈕 */
+    .add-btn {
+      position: absolute;
+      bottom: 25px;
+      right: 20px;
+      z-index: 1000;
+      background: #ff4757;
+      color: white;
+      border: none;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 24px;
+      box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 定位按鈕 */
+    .locate-btn {
+      position: absolute;
+      bottom: 90px;
+      right: 20px;
+      z-index: 1000;
+      background: white;
+      color: #333;
+      border: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-size: 18px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Popup 樣式 */
+    .popup-card { width: 220px; }
+    .popup-card img { width: 100%; height: 130px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+    .popup-title { font-size: 16px; font-weight: bold; margin-bottom: 4px; color: #2c3e50; }
+    .popup-price { color: #e67e22; font-weight: bold; font-size: 13px; margin-bottom: 6px; }
+    .popup-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .popup-actions a, .popup-actions button {
+      flex: 1;
+      text-align: center;
+      padding: 6px 0;
+      font-size: 12px;
+      text-decoration: none;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-ig { background: #e1306c; color: white; }
+    .btn-nav { background: #3498db; color: white; }
+
+    /* Modal 彈窗 (新增網址) */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 地圖容器 -->
+  <div id="map"></div>
+
+  <!-- 懸浮搜尋與篩選列 -->
+  <div class="floating-panel">
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="搜尋餐廳名稱或地區..." onkeyup="filterMarkers()" />
+    </div>
+    <div class="category-bar">
+      <button class="tag-btn active" onclick="filterCategory('全部')">全部</button>
+      <button class="tag-btn" onclick="filterCategory('糖水舖')">糖水舖</button>
+      <button class="tag-btn" onclick="filterCategory('小食')">小食</button>
+      <button class="tag-btn" onclick="filterCategory('Cafe')">Cafe</button>
+      <button class="tag-btn" onclick="filterCategory('正餐')">正餐</button>
+    </div>
+  </div>
+
+  <!-- 定位與新增按鈕 -->
+  <button class="locate-btn" onclick="locateUser()"><i class="fa-solid @crosshairs"></i></button>
+  <button class="add-btn" onclick="openModal()"><i class="fa-solid fa-plus"></i></button>
+
+  <!-- 輸入 IG/Threads URL 的 Modal -->
+  <div class="modal" id="addModal">
+    <div class="modal-content">
+      <h3><i class="fa-solid fa-link"></i> 新增餐廳 Bookmark</h3>
+      <p style="font-size: 12px; color: #666;">貼上 IG 或 Threads 貼文網址，系統會自動 AI 提取資料並存入 Google Sheet：</p>
+      <input type="url" id="postUrlInput" placeholder="https://www.instagram.com/p/..." style="padding: 10px; border: 1px solid #ccc; border-radius: 8px;" />
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button onclick="closeModal()" style="padding: 8px 16px; border: none; background: #eee; border-radius: 6px;">取消</button>
+        <button onclick="submitUrl()" style="padding: 8px 16px; border: none; background: #ff4757; color: white; border-radius: 6px; font-weight: bold;">自動分析並儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // 1. 初始化地圖（預設香港中心點）
+    const map = L.map('map').setView([22.3193, 114.1694], 12);
+
+    // 載入 OpenStreetMap 免費圖層
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let allMarkers = [];
+    let currentCategory = '全部';
+
+    // 範例資料（日後會自動對接你的 Google Sheet API）
+    const mockData = [
+      {
+        name: "聰嫂私房甜品",
+        category: "糖水舖",
+        price: "HK$40 - $70",
+        photo: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400",
+        url: "https://www.instagram.com/",
+        lat: 22.2783,
+        lng: 114.1822
+      },
+      {
+        name: "九龍城泰國小食",
+        category: "小食",
+        price: "HK$20 - $50",
+        photo: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400",
+        url: "https://threads.net/",
+        lat: 22.3282,
+        lng: 114.1916
+      }
+    ];
+
+    // 2. 渲染地圖標籤 (Markers)
+    function renderMarkers(data) {
+      // 清除舊標籤
+      allMarkers.forEach(m => map.removeLayer(m.markerInstance));
+      allMarkers = [];
+
+      data.forEach(item => {
+        const marker = L.marker([item.lat, item.lng]).addTo(map);
+
+        const popupContent = `
+          <div class="popup-card">
+            <img src="${item.photo}" alt="${item.name}" />
+            <div class="popup-title">${item.name}</div>
+            <div class="popup-price"><i class="fa-solid fa-tag"></i> ${item.price}</div>
+            <div class="popup-actions">
+              <a href="${item.url}" target="_blank" class="btn-ig"><i class="fa-brands fa-instagram"></i> 原貼文</a>
+              <button onclick="openNavigation(${item.lat}, ${item.lng}, '${item.name}')" class="btn-nav"><i class="fa-solid fa-location-arrow"></i> 導航</button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        allMarkers.push({ ...item, markerInstance: marker });
+      });
+    }
+
+    renderMarkers(mockData);
+
+    // 3. 關鍵字與分類篩選邏輯
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.tag-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.innerText === cat);
+      });
+      filterMarkers();
+    }
+
+    function filterMarkers() {
+      const keyword = document.getElementById('searchInput').value.toLowerCase();
+      
+      allMarkers.forEach(item => {
+        const matchCat = (currentCategory === '全部' || item.category === currentCategory);
+        const matchKey = item.name.toLowerCase().includes(keyword);
+
+        if (matchCat && matchKey) {
+          map.addLayer(item.markerInstance);
+        } else {
+          map.removeLayer(item.markerInstance);
+        }
+      });
+    }
+
+    // 4. 定位功能
+    function locateUser() {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(position => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          map.setView([lat, lng], 15);
+          L.circle([lat, lng], { radius: 100, color: '#2ed573' }).addTo(map).bindPopup("你現時的位置").openPopup();
+        }, () => alert("無法取得您的位置！"));
+      }
+    }
+
+    // 5. 一鍵地圖導航
+    function openNavigation(lat, lng, name) {
+      // 根據手機系統開啟原生地圖導航
+      const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const navUrl = isApple 
+        ? `maps://maps.apple.com/?daddr=${lat},${lng}&q=${encodeURIComponent(name)}`
+        : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      window.open(navUrl, '_blank');
+    }
+
+    // Modal 控制
+    function openModal() { document.getElementById('addModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('addModal').style.display = 'none'; }
+
+    // 6. 提交 URL 自動處理 (接駁點)
+    function submitUrl() {
+      const url = document.getElementById('postUrlInput').value;
+      if (!url) return alert("請輸入有效的網址！");
+      
+      alert("已收到網址！系統正在發送至 Google Sheet / AI 處理擷取...");
+      closeModal();
+      document.getElementById('postUrlInput').value = '';
+    }
+  </script>
+</body>
+</html>
